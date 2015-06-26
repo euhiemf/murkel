@@ -1,0 +1,46 @@
+
+<nav class="navbar navbar-inverse navbar-fixed-top">
+	<div class="container">
+		<div class="navbar-header">
+			<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+				<span class="sr-only">Toggle navigation</span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+			</button>
+			<a class="navbar-brand" href="#"><%= page_title %></a>
+		</div>
+		<div id="navbar" class="navbar-collapse collapse">
+			<ul class="nav navbar-nav">
+
+				<% function loopPages (pages, page_path, first) { %>
+
+					<% _.each(pages, function (item) { %>
+
+						<% if (_.has(item, 'name')) { %>
+							<li<% if (page_path === item.path) print(" class='active'"); %>><a href="/<%= item.path %>"><%= item.data.title %></a></li>
+						<% } else { %>
+
+							<% name = _.keys(item)[0] %>
+							<li class="dropdown<% if (!first) print("-submenu") %>">
+								<a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false"><%= name %><span class="caret"></span></a>
+								<ul class="dropdown-menu multi-level">
+									<% loopPages(item[name], page_path, false) %>
+								</ul>
+							</li>
+
+						<% } %>
+
+					<% }); %>
+
+				<% } %>
+
+				<% loopPages(pages, page_path, true) %>
+
+				<!-- <li class="active"><a href="#">Home</a></li> -->
+				<!-- <li><a href="#about">About</a></li> -->
+			</ul>
+		</div><!--/.nav-collapse -->
+	</div>
+</nav>
+
