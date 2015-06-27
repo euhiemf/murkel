@@ -21,6 +21,7 @@ pages
     │   │   information.md
     │   │   ...
     │   
+│   
 scaffolding
 │   page.html
 │   header.html
