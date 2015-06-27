@@ -7,9 +7,53 @@ EventEmitter = require('events').EventEmitter
 rimraf = require 'rimraf'
 ncp = require('ncp').ncp
 
+Promise = require('es6-promise').Promise
+
 
 mkdirp = require 'mkdirp'
 cwd = process.cwd()
+
+pages = []
+
+createDirectories = (list) -> new Promise (resolve, reject) ->
+
+
+	len = list.length
+	count = 0
+
+	# emitter.on 'ready', 
+	tht = @
+
+	for d in list
+		mkdirp path.join(cwd, 'static_site', d), do (len) -> (err) ->
+
+			count++
+
+			if count is len
+				resolve()
+
+
+readFiles = (files) -> new Promise (resolve, reject) ->
+
+	collection = []
+
+	len = files.length
+	count = 0
+
+	for file, index in files
+		fs.readFile path.join(cwd, 'pages', file.path), 'utf8', do (file, len, index) -> (err, data) ->
+			if (err) then console.log err
+					
+			files[index].raw_data = data
+
+			count++
+
+			if count is files.length
+				resolve(files)
+
+
+
+
 
 
 hasKey = (ob, key) ->
@@ -35,94 +79,15 @@ namespace = (base, string, end) ->
 
 	base.push end
 
-
-
-makeMenu = (ugly) ->
+prettyData = (ugly) ->
 
 	tree = []
 
 	for item in ugly
+		namespace tree, item.parent, _.omit(item, 'raw_data', 'content', 'menu')
 
-		namespace tree, item.parent, item
 
 	return tree
-
-pages = {
-	unlinked: [],
-	menu: []
-}
-
-browse = readdirp({ root: path.join(cwd, 'pages'), fileFilter: ['*.html', '*.md']})
-
-browse.on 'data', (entry) ->
-
-	split = entry.parentDir.split('/')
-
-	if entry.parentDir is ""
-		pages.unlinked.push
-			name: entry.name
-			path: entry.path
-
-	if split[0] is 'menu'
-		pages.menu.push
-			name: entry.name
-			path: entry.path
-			parent: entry.parentDir
-
-
-
-toHtmlExt = (path) ->
-	dots = path.split('.')
-	dots.splice dots.length - 1, 1
-	name = dots.join('.')
-	name += ".html"
-
-	return name
-
-
-
-writeFiles = (data) ->
-	emitter = new EventEmitter()
-	count = 0
-	len = data.length
-	emitter.on 'increase', ->
-
-	for d in data
-
-		if path.extname(d.path) isnt '.html' then d.path = toHtmlExt(d.path)
-
-		fs.writeFile path.join(cwd, 'static_site', d.path), d.data, do (emitter, len) -> (err) ->
-			count++
-			if count is len then emitter.emit 'ready'
-
-	return emitter
-
-templetize = (content, templates) -> 
-
-	view = {
-		content: content
-	}
-
-
-	page_view = {
-		pages: makeMenu(pages.menu)[0]
-	}
-
-	# console.log page_view.menu
-
-	for i in templates when i.name isnt 'page'
-		templ = _.template(i.data)
-		view[i.name] = templ(page_view)
-
-
-
-	page = _.findWhere templates, { name: 'page' }
-	templ = _.template(page.data)
-
-	return templ view
-
-
-
 
 getTemplates = (cb) ->
 
@@ -148,74 +113,134 @@ getTemplates = (cb) ->
 					cb templates
 
 
+compileData = (collection) -> new Promise (resolve, reject) -> getTemplates (templates) ->
 
 
-readFiles = (list) ->
+	for file, index in collection
 
-	collection = []
+		content = file.raw_data
+		data = {}
 
-	len = list.length
-	emitter = new EventEmitter()
+		info_reg = /^-{3}\n((.|\n)*?)\n-{3}/
 
-	# emitter.on 'ready', cb
+		if info_reg.test(content)
+			json = "{#{info_reg.exec(content)[1]}}"
+			data = JSON.parse json
+			content = content.replace(info_reg, "").replace(/^\n/, "")
 
-	getTemplates (templates) ->
+		if path.extname(file.path) is '.md'
+			content = marked content
+			collection[index].path = toHtmlExt(file.path)
 
-		for fname in list
-			fs.readFile path.join(cwd, 'pages', fname), 'utf8', do (fname, len) -> (err, data) ->
-				if (err) then console.log err
+		collection[index].content = content
+		collection[index].data = data
 
-				if path.extname(fname) is '.md'
-					data = marked data
-						
-
-				data = templetize(data, templates)
-
-				collection.push
-					path: fname
-					data: data
-
-				if collection.length is list.length
-					emitter.emit 'ready', collection
-
-	return emitter
+		resolve
+			collection: collection
+			templates: templates
 
 
+templetize = (collection, templates) -> new Promise (resolve, reject) ->
+
+	page_data = prettyData(_.where(collection, { menu: true }))[0].menu
+
+	for file, index in collection
+
+		view = {
+			content: file.content
+		}
+
+		page_view = {
+			pages: page_data
+			page_path: file.path
+		}
+
+		if file.data.title
+			page_view.page_title = file.data.title
+		else
+			page_view.page_title = path.basename(file.path, '.html')
 
 
-createDirs = (list) ->
-	len = list.length
+		for i in templates when i.name isnt 'page'
+			templ = _.template(i.data)
+			view[i.name] = templ(page_view)
+
+
+		page = _.findWhere templates, { name: 'page' }
+		templ = _.template(page.data)
+
+		collection[index].content = templ view
+
+
+	resolve collection
+
+
+toHtmlExt = (path) ->
+	dots = path.split('.')
+	dots.splice dots.length - 1, 1
+	name = dots.join('.')
+	name += ".html"
+
+	return name
+
+
+
+writeFiles = (collection) -> new Promise (resolve, reject) ->
 	count = 0
-	emitter = new EventEmitter()
+	len = collection.length
 
-	# emitter.on 'ready', 
+	for file in collection
 
-	for d in list
-		mkdirp path.join(cwd, 'static_site', d), do (len, emitter) -> (err) ->
+		if path.extname(file.path) isnt '.html' then file.path = toHtmlExt(file.path)
 
+		fs.writeFile path.join(cwd, 'static_site', file.path), file.content, do (len) -> (err) ->
 			count++
-
-			if count is len
-				emitter.emit 'ready'
-
-	return emitter
-		
+			if count is len then resolve()
 
 
+cloneAssets = -> new Promise (resolve, reject) ->
 
-browse.on 'end', ->
+	outpath = path.join(cwd, 'static_site/assets')
+
+	rimraf outpath, ->
+		fs.lstat path.join(cwd, 'assets'), (err, stats) ->
+			if not err and stats.isDirectory()
+				ncp path.join(cwd, 'assets'), outpath, (err)->
+					resolve()
 
 
-	directories = _.uniq(_.pluck(pages.menu, 'parent'))
-	files = _.pluck(_.extend(_.clone(pages.menu), pages.unlinked), 'path')
 
-	createDirs(directories).on 'ready', ->
-		console.log 'Directories created'
-		readFiles(files).on 'ready', (data) ->
-			console.log 'Files read'
-			writeFiles(data).on 'ready', ->
-				fs.lstat path.join(cwd, 'assets'), (err, stats) ->
-					if not err and stats.isDirectory()
-						ncp path.join(cwd, 'assets'), path.join(cwd, 'static_site/assets'), (err)->
-							console.log 'DONE copying assets'
 
+initialize = ->
+
+	directories = _.uniq(_.pluck(_.where(pages, { menu: true }), 'parent'))
+	files = _.extend(_.clone(pages), pages.unlinked)
+
+	createDirectories(directories).then ->
+		readFiles(files).then (collection) ->
+			compileData(collection).then (data) ->
+				templetize(data.collection, data.templates).then (collection) ->
+					writeFiles(collection).then ->
+						cloneAssets().then ->
+							console.log 'done!'
+
+
+
+
+browse = readdirp({ root: path.join(cwd, 'pages'), fileFilter: ['*.html', '*.md']})
+
+browse.on 'data', (entry) ->
+
+	split = entry.parentDir.split('/')
+
+	file = {
+		name: entry.name
+		path: entry.path
+		parent: entry.parentDir
+	}
+
+	file.menu = split[0] is 'menu'
+
+	pages.push file
+
+browse.on 'end', -> initialize()
