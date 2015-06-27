@@ -1,5 +1,5 @@
 # murkel
-Generates static site from markdown files
+Generate static site from markdown files
 
 ## Folder Structure
 
