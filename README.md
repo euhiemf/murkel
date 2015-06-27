@@ -30,4 +30,4 @@ scaffolding
 
 ```
 
-Run the cli.coffee with coffeescript from the root folder. A folder named `static_site` will be created containing the same structure as `pages` but compiled by the templates in `scaffolding`.
+Run the cli.coffee with coffeescript from the root folder. A folder named `static_site` will be created containing the same structure as `pages` but compiled by the templates in `scaffolding`. `assets` will also be copied over to `static_site` folder.
